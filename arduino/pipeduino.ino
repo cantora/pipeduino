@@ -27,12 +27,12 @@ void send_status() {
   unsigned long t;
 
   if(g_count > 0) {
-    send("count", g_count);
+    send("c", g_count);
     g_count = 0;
   }
 
   if(g_write_fails > 0) {
-    send("write_fails", g_write_fails);
+    send("w", g_write_fails);
     g_write_fails = 0;
   }
 
@@ -42,13 +42,13 @@ void send_status() {
   }
 }
 
-void status() {
+void status(int force) {
   unsigned long t;
 
   t = millis();
   /* t overflow is ok, it just means
    * we might update the status early */
-  if(t - g_time > STATUS_INTERVAL) {
+  if( (force != 0) || (t - g_time > STATUS_INTERVAL) ) {
     send_status();
     g_time = t;
   }
@@ -58,7 +58,7 @@ void setup() {
   int rate = 9600;
   /* set the rate for the input */
   Serial.begin(rate);
-  s_output.begin(rate);
+  s_output.begin(115200);
 
   g_time = millis();
   g_count = 0;
@@ -76,7 +76,10 @@ void loop() {
       g_write_fails += 1;
     else
       g_count += 1;
-  }
 
-  status();
+    status(0);
+  }
+  else
+    status(1);
+
 }
