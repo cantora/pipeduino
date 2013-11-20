@@ -23,7 +23,10 @@ typedef enum {
 struct proto_msg {
   proto_type_t type;
   union {
-    char *err_msg;
+    struct {
+      char *msg;
+      uint8_t byte;
+    } error;
     uint32_t counter;
   } contents;
 };

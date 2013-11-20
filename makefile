@@ -7,7 +7,7 @@ SRCS      = $(notdir $(filter-out src/pipeduino.c, $(wildcard src/*.c)) )
 OBJECTS   = $(patsubst %.c, src/%.o, $(SRCS) )
 
 pipeduino: src/pipeduino.o $(OBJECTS) src/configure.h
-	$(CXX_CMD) -o $@ $< $(OBJECTS)
+	$(CXX_CMD) -o $@ $< $(OBJECTS) -lpthread
 
 src/pipeduino.o: src/pipeduino.c $(OBJECTS)
 	$(CXX_CMD) -o $@ -c $<

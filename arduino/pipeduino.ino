@@ -1,49 +1,71 @@
 #include "SerialTX.h"
 
+#include <stdint.h>
+
+extern "C" {
+  #include "proto_encode.h"
+}
+
 #define STATUS_INTERVAL 1000 /* milliseconds */
 #define PING_INTERVAL (5*1000) /* milliseconds */
 
 SerialTX s_output(11);
-unsigned long g_time, g_count, g_write_fails, g_last_ping;
+uint32_t g_time, g_last_ping, g_total, g_count, g_write_fails;
 
-void send(const char *name, unsigned long v) {
-  Serial.write('\r');
-  Serial.write('!');
-  Serial.print(name);
-  Serial.write('=');
-  Serial.print(v);
-  Serial.print('\n');
+void send_err() {
+  Serial.write(PD_OP_ERR);
+}
 
-  /* any message counts as a ping */
+void send(uint8_t *buf, size_t amt) {
+  if(Serial.write(buf, amt) != amt) {
+    send_err();
+  }
+
   g_last_ping = millis();
 }
 
-void ping(unsigned long t) {
-  Serial.println("\r*");
-  g_last_ping = t;
+void send_op(proto_op_t op) {
+  if(Serial.write(op) != 1)
+    send_err();
+}
+
+void send_err_write() {
+  send_op(PD_OP_ERR_WRITE);
+}
+
+void send_err_overflow() {
+  send_op(PD_OP_ERR_OVERFLOW);
+}
+
+void send_count(uint32_t v) {
+  uint8_t buf[16];
+  size_t sz;
+
+  sz = proto_encode_op_vint(buf, sizeof(buf), v);
+  if(sz > sizeof(buf))
+    send_err();
+  else
+    send(buf, sz);
 }
 
 void send_status() {
-  unsigned long t;
-
-  if(g_count > 0) {
-    send("c", g_count);
-    g_count = 0;
-  }
-
-  if(g_write_fails > 0) {
-    send("w", g_write_fails);
-    g_write_fails = 0;
-  }
+  uint32_t t;
+  uint32_t new_count;
 
   t = millis();
-  if(t - g_last_ping > PING_INTERVAL) {
-    ping(t);
+  if((g_count > 0) || (t - g_last_ping > PING_INTERVAL)) {
+    new_count = g_total + g_count;
+    if(new_count < g_total)
+      send_err_overflow();
+
+    g_total = new_count;
+    send_count(g_total);
+    g_count = 0;
   }
 }
 
 void status(int force) {
-  unsigned long t;
+  uint32_t t;
 
   t = millis();
   /* t overflow is ok, it just means
@@ -62,10 +84,11 @@ void setup() {
 
   g_time = millis();
   g_count = 0;
+  g_total = 0;
   g_write_fails = 0;
   g_last_ping = 0;
 
-  ping(millis());
+  send_count(0);
 }
 
 void loop() {
@@ -73,7 +96,7 @@ void loop() {
 
   if((b = Serial.read()) >= 0) {
     if(s_output.write(b) != 1)
-      g_write_fails += 1;
+      send_err_write();
     else
       g_count += 1;
 
@@ -81,5 +104,4 @@ void loop() {
   }
   else
     status(1);
-
 }
