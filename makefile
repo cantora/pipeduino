@@ -15,3 +15,6 @@ src/pipeduino.o: src/pipeduino.c $(OBJECTS)
 src/%.o: src/%.c src/%.h
 	$(CXX_CMD) -o $@ -c $<
 
+.PHONY: clean
+clean:
+	rm -f pipeduino src/*.o 

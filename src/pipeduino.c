@@ -32,7 +32,7 @@ void err_exit(int error, const char *format, ...) {
 int serial_fd() {
   int fd, flags;
 
-  flags = O_RDWR | O_NOCTTY | O_NDELAY; /*| O_DIRECT | O_NOTTY;*/
+  flags = O_RDWR | O_NOCTTY | O_NDELAY; /*| O_DIRECT */
   if( (fd = open(PIPEDUINO_PATH, flags)) == -1)
     err_exit(errno, "failed to open serial connection to arduino");
 
