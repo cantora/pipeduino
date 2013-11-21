@@ -29,7 +29,7 @@ void proto_encode_uint16(uint8_t *buf, uint16_t val) {
 size_t proto_encode_op_vint(uint8_t *buf, size_t size, uint32_t val) {
   size_t pkt_sz;
 
-  if(val <= 0x255) {
+  if(val <= 0xff) {
     pkt_sz = 2;
 
     if(size >= pkt_sz) {
