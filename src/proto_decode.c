@@ -58,6 +58,7 @@ size_t proto_decode(const uint8_t *buf, size_t size, struct proto_msg *pkt) {
     pkt->contents.error.msg = "device failed to write to output";
   case PD_OP_ERR_OVERFLOW:
     pkt->contents.error.msg = "device counter overflowed";
+    pkt->contents.error.op = buf[0];
     pkt_sz = 1;
     pkt->type = PD_MSG_ERR;
     break;
@@ -74,6 +75,7 @@ size_t proto_decode(const uint8_t *buf, size_t size, struct proto_msg *pkt) {
     pkt_sz = 1; /* move to next byte if we want to keep going */
     pkt->type = PD_MSG_ERR;
     pkt->contents.error.msg = "protocol error";
+    pkt->contents.error.op = PD_OP_ERR_PROTO;
     pkt->contents.error.byte = buf[0];
   }
 

@@ -8,9 +8,15 @@ extern "C" {
 
 #define STATUS_INTERVAL 1000 /* milliseconds */
 #define PING_INTERVAL (5*1000) /* milliseconds */
+#define INPUT_TIMEOUT (5*1000) /* milliseconds */
 
 SerialTX s_output(11);
-uint32_t g_time, g_last_ping, g_total, g_count, g_write_fails;
+uint32_t g_time,
+         g_last_ping,
+         g_last_input,
+         g_total,
+         g_count,
+         g_write_fails;
 
 void send_err() {
   Serial.write(PD_OP_ERR);
@@ -97,11 +103,20 @@ void loop() {
   if((b = Serial.read()) >= 0) {
     if(s_output.write(b) != 1)
       send_err_write();
-    else
+    else {
+      g_last_input = millis();
       g_count += 1;
+    }
 
     status(0);
   }
-  else
+  else {
     status(1);
+    
+    if(millis() - g_last_input > INPUT_TIMEOUT) {
+      /* reset state on idle input */
+      g_count = 0;
+      g_total = 0;
+    }
+  }
 }

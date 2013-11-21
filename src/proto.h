@@ -25,7 +25,8 @@ struct proto_msg {
   union {
     struct {
       char *msg;
-      uint8_t byte;
+      uint8_t op;
+      uint8_t byte; /* byte that caused a protocol error */
     } error;
     uint32_t counter;
   } contents;
