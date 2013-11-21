@@ -83,9 +83,8 @@ void status(int force) {
 }
 
 void setup() {
-  int rate = 9600;
   /* set the rate for the input */
-  Serial.begin(rate);
+  Serial.begin(115200);
   s_output.begin(115200);
 
   g_time = millis();

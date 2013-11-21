@@ -26,6 +26,7 @@ struct pipeduino {
 void err_exit(int error, const char *format, ...) {
   va_list args;
 
+  printf("\n");
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
@@ -91,7 +92,9 @@ void on_counter_init(struct pipeduino *p, uint32_t counter) {
 
 void on_counter(struct pipeduino *p, uint32_t counter) {
   const char *err;
-  uint64_t diff;
+  uint64_t amt;
+  static uint64_t prev = 0;
+  static int stalls = 0;
 
   err = NULL;
   printf("counter=%d\r", counter);
@@ -101,17 +104,23 @@ void on_counter(struct pipeduino *p, uint32_t counter) {
 
   pipeduino_counter_lock(p);
   if(counter < p->counter) {
-    diff = p->counter - counter;
+    if(prev == counter) {
+      if(stalls > 2)
+        err = "arduino counter stalled out, there must have been an overflow";
+      else
+        stalls += 1;
+    }
+    amt = 0; //p->counter - counter;
   }
   else if(counter == p->counter) {
-    diff = PIPEDUINO_BAUD;
+    amt = 212;
   }
   else if(p->counter > 0) {
     err = "error: somehow arduino counter is ahead of ours";
   }
 
-  if(err == NULL && diff <= PIPEDUINO_BAUD) {
-    p->counter += diff;
+  if(err == NULL && amt > 0) {
+    p->counter += amt;
     pipeduino_counter_signal(p);
   }
   pipeduino_counter_unlock(p);
@@ -174,6 +183,7 @@ void reader(struct pipeduino *p) {
     else if(amt == 0)
       brk = 1;
     else {
+      /*int i; printf("read: "); for(i = 0; i < amt; i++) { printf("%02x", buf[i]);}; puts("");*/
       proto_decode_stream_buf(&strm, buf, amt);
       while( (status = proto_decode_stream_next(&strm, &msg)) == 1) {
         on_msg(p, &msg);
@@ -247,7 +257,7 @@ uint64_t write_loop(struct pipeduino *state) {
         }
       }
       else if(buf_amt == 0) {
-        printf("stdin closed\n");
+        printf("\nstdin closed\n");
         brk = 1;
       }
       if(brk != 0)
