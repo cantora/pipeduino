@@ -93,11 +93,12 @@ void on_counter_init(struct pipeduino *p, uint32_t counter) {
 void on_counter(struct pipeduino *p, uint32_t counter) {
   const char *err;
   uint64_t amt;
+  const uint64_t max_amt = 8182;
   static uint64_t prev = 0;
   static int stalls = 0;
 
   err = NULL;
-  printf("counter=%d\r", counter);
+  //printf("counter=%d\r", counter);
 
   if(p->zeros < PIPEDUINO_INIT_ZEROS) 
     return on_counter_init(p, counter);
@@ -109,11 +110,20 @@ void on_counter(struct pipeduino *p, uint32_t counter) {
         err = "arduino counter stalled out, there must have been an overflow";
       else
         stalls += 1;
+
+      amt = 0; //p->counter - counter;
     }
-    amt = 0; //p->counter - counter;
+    else if(prev < counter) {
+      amt = counter - prev;
+      if(amt > max_amt)
+        amt = max_amt;
+    }
+    else {
+      err = "error: arduino counter has moved backward";
+    }
   }
   else if(counter == p->counter) {
-    amt = 212;
+    amt = max_amt;
   }
   else if(p->counter > 0) {
     err = "error: somehow arduino counter is ahead of ours";
@@ -155,7 +165,7 @@ void on_msg(struct pipeduino *p, const struct proto_msg *msg) {
 
 void reader(struct pipeduino *p) {
   int brk, status;
-  uint8_t buf[256];
+  uint8_t buf[1024];
   ssize_t amt;
   struct proto_stream strm;
   struct proto_msg msg;
@@ -175,7 +185,7 @@ void reader(struct pipeduino *p) {
       case EAGAIN:
         continue;
       default:
-        printf("error while reading from serial device %d: ", errno);
+        fprintf(stderr, "error while reading from serial device %d: ", errno);
         puts(strerror(errno));
         brk = 1;
       }
@@ -193,7 +203,7 @@ void reader(struct pipeduino *p) {
 
   } while(brk == 0);
 
-  printf("reader finished\n");
+  fprintf(stderr, "reader finished\n");
 }
 
 void *reader_main(void *user) {
@@ -221,7 +231,7 @@ int write_all(int sfd, uint8_t *buf, ssize_t amt) {
       case EAGAIN:
         continue;
       default:
-        printf("error while writing to sfd %d: ", errno);
+        fprintf(stderr, "error while writing to sfd %d: ", errno);
         puts(strerror(errno));
         return -1;
       }
@@ -232,46 +242,70 @@ int write_all(int sfd, uint8_t *buf, ssize_t amt) {
   return 0;
 }
 
+void print_status(const struct pipeduino *state, time_t first_write, uint64_t total) {
+  time_t diff;
+  double avg, total_k;
+  (void)(state);
+
+  diff = time(NULL) -  first_write;
+
+  if(diff > 0 && total > 0) {
+    total_k = total/((double) 1024);
+    avg = total_k/diff;
+    printf("[%.2f kb/s] >> %.1f k            \r", avg, total_k);
+  }
+}
+
+uint64_t wait_for_counter(struct pipeduino *p, 
+                      int show_status, 
+                      time_t first_write, 
+                      uint64_t total) {
+  uint64_t limit;
+
+
+  pipeduino_counter_lock(p);
+  while(p->counter < total) {
+    if(show_status != 0)
+      print_status(p, first_write, total);    
+    pipeduino_counter_wait(p);
+    /* counter is locked */
+  } 
+  limit = p->counter;
+  pipeduino_counter_unlock(p);
+
+  return limit;
+}
+
 uint64_t write_loop(struct pipeduino *state) {
   uint8_t buf[256];
   ssize_t buf_amt, buf_offset;
   uint64_t total, limit, amt;
-  int brk;
+  time_t first_write;
+  int started;
 
   total = 0;
   buf_amt = 0;
   buf_offset = 0;
-  brk = 0;
+  started = 0;
+
   while(1) {
     if((buf_amt - buf_offset) <= 0) {
       buf_offset = 0;
       buf_amt = read(STDIN_FILENO, buf, sizeof(buf));
       if(buf_amt < 0) {
-        switch(errno) {
-        case EAGAIN:
+        if(errno == EAGAIN)
           continue;
-        default:
-          printf("error while reading from stdin %d: ", errno);
-          puts(strerror(errno));
-          brk = 1;
-        }
+        fprintf(stderr, "error while reading from stdin %d: %s", errno, strerror(errno));
+        break;
       }
       else if(buf_amt == 0) {
-        printf("\nstdin closed\n");
-        brk = 1;
-      }
-      if(brk != 0)
+        fprintf(stderr, "\nstdin closed. wait for arduino\n");
+        wait_for_counter(state, 0, first_write, total);
         break;
+      }
     }
 
-    pipeduino_counter_lock(state);
-    while(state->counter <= total) {
-      pipeduino_counter_wait(state);
-      /* counter is locked */
-    } 
-    limit = state->counter;
-    pipeduino_counter_unlock(state);
-
+    limit = wait_for_counter(state, 1, first_write, total);
     amt = limit - total;
     if(amt > (uint64_t) buf_amt)
       amt = buf_amt;
@@ -279,6 +313,10 @@ uint64_t write_loop(struct pipeduino *state) {
     if(write_all(state->sfd, buf+buf_offset, amt) != 0)
       break;
     else {
+      if(started == 0) {
+        started = 1;
+        first_write = time(NULL);
+      }
       total += amt;
       buf_offset += amt;
     }
@@ -297,8 +335,6 @@ int main(int argc, char *argv[]) {
 
   (void)(argc); (void)(argv);
   
-  fprintf(stderr, "hey\n");
-
   if( (status = pthread_mutex_init(&state.counter_mtx, NULL)) != 0)
     err_exit(status, "mutex init failed");
   if( (status = pthread_cond_init(&state.counter_cond, NULL)) != 0)
