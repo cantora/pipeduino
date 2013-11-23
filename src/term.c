@@ -53,6 +53,8 @@ int term_set_attrs(int fd, speed_t speed, const struct termios *old_attr) {
     IXON      /* disable output flow control */
     | IXANY   
     | IXOFF   /* disable flow control on input */
+    | INLCR    /* dont translate NL */
+    | ICRNL    /* dont translate CR */
 #if 0 /* not sure if we want these or not */
     | IGNBRK  /* ignore break on input */
     | BRKINT  /* ignore break */
