@@ -170,7 +170,7 @@ void on_msg(struct pipeduino *p, const struct proto_msg *msg) {
 }
 
 void reader(struct pipeduino *p) {
-  int brk, status;
+  int brk, status, first_read;
   uint8_t buf[1024];
   ssize_t amt;
   struct proto_stream strm;
@@ -181,6 +181,8 @@ void reader(struct pipeduino *p) {
   flush_all(p->sfd);
 
   brk = 0;
+  first_read = 0;
+  printf("wait for signal from arduino...\n");
   do {
     if(p->done != 0)
       return;
@@ -199,6 +201,10 @@ void reader(struct pipeduino *p) {
     else if(amt == 0)
       brk = 1;
     else {
+      if(first_read == 0) {
+        printf("read %ld bytes from arduino\n", amt);
+        first_read = 1;
+      }
       /* int i; printf("read: "); for(i = 0; i < amt; i++) { printf("%02x", buf[i]);}; puts(""); */
       proto_decode_stream_buf(&strm, buf, amt);
       while( (status = proto_decode_stream_next(&strm, &msg)) == 1) {
