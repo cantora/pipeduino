@@ -1,5 +1,5 @@
 #install from github.com/sudar/Arduino-Makefile
-ARDUINO_DIR      = /home/cantora/install/Arduino
+ARDUINO_DIR      = $(HOME)/install/Arduino
 ARDUINO_MK_DIR   = ../../Arduino-Makefile
 BOARD_TAG        = atmega8
 ARDUINO_PORT     = /dev/ttyUSB0
